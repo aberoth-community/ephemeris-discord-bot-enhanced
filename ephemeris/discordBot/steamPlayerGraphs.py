@@ -67,15 +67,15 @@ def build_player_count_graph(start_ts: int, end_ts: int) -> Tuple[Optional[io.By
             linewidth=2,
         )
 
-    ax.plot(
-        labels,
-        totals,
-        color=TOTAL_LINE_COLOR,
-        marker="o",
-        label=f"Total ({total_last})",
-        linewidth=2.5,
-        linestyle="--",
-    )
+    # ax.plot(
+    #     labels,
+    #     totals,
+    #     color=TOTAL_LINE_COLOR,
+    #     marker="o",
+    #     label=f"Total ({total_last})",
+    #     linewidth=2.5,
+    #     linestyle="--",
+    # )
 
     title_obj = ax.set_title("Player count history", color=axes_xcolor, fontsize=14)
     title_obj.set_path_effects(
