@@ -28,6 +28,7 @@ def build_player_count_graph(start_ts: int, end_ts: int) -> Tuple[Optional[io.By
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         import matplotlib.dates as mdates
+        import matplotlib.ticker as mticker
         from matplotlib import patheffects
     except Exception:
         return None, "Graphing requires matplotlib to be installed."
@@ -53,13 +54,16 @@ def build_player_count_graph(start_ts: int, end_ts: int) -> Tuple[Optional[io.By
     spine_color = "#1B1C1F"
     grid_color = "#2C2E33"
 
+    last_values = {realm: series[realm][-1] for realm in REALM_KEYS}
+    total_last = totals[-1]
+
     for realm in REALM_KEYS:
         ax.plot(
             labels,
             series[realm],
             color=REALM_LINE_COLORS.get(realm, "#FFFFFF"),
             marker="o",
-            label=REALM_LABELS.get(realm, realm),
+            label=f"{REALM_LABELS.get(realm, realm)} ({last_values[realm]})",
             linewidth=2,
         )
 
@@ -68,7 +72,7 @@ def build_player_count_graph(start_ts: int, end_ts: int) -> Tuple[Optional[io.By
         totals,
         color=TOTAL_LINE_COLOR,
         marker="o",
-        label="Total",
+        label=f"Total ({total_last})",
         linewidth=2.5,
         linestyle="--",
     )
@@ -83,14 +87,24 @@ def build_player_count_graph(start_ts: int, end_ts: int) -> Tuple[Optional[io.By
     ax.grid(color=grid_color)
     ax.tick_params(axis="x", colors=axes_xcolor)
     ax.tick_params(axis="y", colors=axes_xcolor)
+    ax.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))
 
     for spine in ax.spines.values():
         spine.set_color(spine_color)
         spine.set_linewidth(2)
 
-    locator = mdates.AutoDateLocator(minticks=4, maxticks=8)
+    range_seconds = end_ts - start_ts
+    if range_seconds <= 6 * 3600:
+        locator = mdates.HourLocator(interval=1)
+        formatter = mdates.DateFormatter("%H:%M")
+    elif range_seconds <= 2 * 86400:
+        locator = mdates.HourLocator(interval=6)
+        formatter = mdates.DateFormatter("%b %d %H:%M")
+    else:
+        locator = mdates.DayLocator(interval=1)
+        formatter = mdates.DateFormatter("%b %d")
     ax.xaxis.set_major_locator(locator)
-    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
+    ax.xaxis.set_major_formatter(formatter)
 
     legend = ax.legend(ncol=2)
     if legend is not None:
