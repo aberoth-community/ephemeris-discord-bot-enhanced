@@ -10,8 +10,8 @@ from .configFiles.variables import *
 from .configFiles.dataBase import *
 
 ephemeris = Ephemeris.Ephemeris(
-    start=(time.time() * 1000) + -4 * oneDay,
-    end=(time.time() * 1000) + 35 * oneDay,
+    start=(int(time.time() * 1000)) + -4 * oneDay,
+    end=(int(time.time() * 1000)) + 35 * oneDay,
     numMoonCycles=numMoonCycles,
     discordTimestamps=True,
     multiProcess=True,

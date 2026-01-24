@@ -1,3 +1,4 @@
+import asyncio
 import time
 from peewee import fn
 from discord.ext import tasks
@@ -5,10 +6,18 @@ from .guildScrollMenus import *
 from .guildLunarMenus import *
 from .helperFuncs import splitMsg
 from .usageGraphs import build_usage_graph
+from .steamPlayerCount import get_steam_player_count
+from .steamPlayerMenus import GuildSteamPlayerMenu
+from .steamPlayerReports import build_player_count_report
 from .configFiles.usageDataBase import (
     UsageEvent,
     get_source_breakdown,
     get_top_guilds,
+)
+from .configFiles.steamPlayerDataBase import (
+    delete_steam_menu,
+    get_all_steam_menus,
+    record_player_counts,
 )
 from .configFiles.variables import (
     ENABLE_USAGE_LOGGING,
@@ -32,6 +41,7 @@ class PersistentViewBot(commands.Bot):
     async def setup_hook(self) -> None:
         self.add_view(GuildScrollMenu(allow_filters=1, setUp=False))
         self.add_view(GuildLunarMenu())
+        self.add_view(GuildSteamPlayerMenu())
 
 
 bot = PersistentViewBot()
@@ -52,6 +62,8 @@ async def on_ready():
         and not usage_report_task.is_running()
     ):
         usage_report_task.start()
+    if not steam_player_task.is_running():
+        steam_player_task.start()
 
 
 def _format_usage_report(range_label: str, start_ts: int, end_ts: int) -> list[str]:
@@ -188,4 +200,58 @@ async def usage_report_task():
 
 @usage_report_task.before_loop
 async def usage_report_task_before_loop():
+    await bot.wait_until_ready()
+
+
+@tasks.loop(minutes=5)
+async def steam_player_task():
+    try:
+        counts = await asyncio.to_thread(get_steam_player_count)
+        record_player_counts(None, counts)
+        await _update_steam_player_menus()
+    except SystemExit as e:
+        print(f"Steam player count task exit: {e}")
+    except Exception as e:
+        print(f"Steam player count task error: {e}")
+
+
+async def _update_steam_player_menus() -> None:
+    menus = get_all_steam_menus()
+    if not menus:
+        return
+    for menu in menus:
+        try:
+            channel = bot.get_channel(int(menu.channel_id))
+            if channel is None:
+                channel = await bot.fetch_channel(int(menu.channel_id))
+            message = await channel.fetch_message(int(menu.message_id))
+            include_graph = bool(menu.include_graph)
+            range_hours = int(menu.range_hours)
+            content, graph_buf, graph_error = build_player_count_report(
+                include_graph=include_graph,
+                range_hours=range_hours,
+            )
+            if graph_error:
+                content = f"{content}\n**Graph:** {graph_error}"
+            view = GuildSteamPlayerMenu(
+                include_graph=include_graph,
+                range_hours=range_hours,
+            )
+            if include_graph and graph_buf is not None and graph_error is None:
+                graph_file = discord.File(
+                    fp=graph_buf, filename="steam_player_counts.png"
+                )
+                await message.edit(
+                    content=content, attachments=[graph_file], view=view
+                )
+            else:
+                await message.edit(content=content, attachments=[], view=view)
+        except (discord.NotFound, discord.Forbidden):
+            delete_steam_menu(menu.message_id)
+        except Exception as e:
+            print(f"Steam menu update error: {e}")
+
+
+@steam_player_task.before_loop
+async def steam_player_task_before_loop():
     await bot.wait_until_ready()

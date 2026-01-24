@@ -2,6 +2,15 @@ from .bot import bot
 from .guildScrollMenus import *
 from .guildLunarMenus import *
 from .helperFuncs import *
+from .steamPlayerCount import get_steam_player_count
+from .steamPlayerMenus import GuildSteamPlayerMenu, GRAPH_RANGE_CHOICES
+from .steamPlayerReports import build_player_count_report
+from .configFiles.steamPlayerDataBase import (
+    get_latest_player_counts,
+    record_player_counts,
+    upsert_steam_menu,
+)
+import asyncio
 
 
 @bot.tree.command(
@@ -189,3 +198,94 @@ async def guildLunarMenu(
     await interaction.response.send_message(
         embed=embed, view=GuildLunarMenu(), ephemeral=False
     )
+
+
+@bot.tree.command(
+    name="persistent_steam_player_counts",
+    description="Creates a persistent Steam player count panel. Requires admin.",
+)
+@app_commands.allowed_installs(guilds=True, users=False)
+@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=True)
+@app_commands.default_permissions()
+@app_commands.describe(
+    graph="Include a player count history graph",
+    range_hours="Hours of history to graph (default 24)",
+)
+@app_commands.choices(
+    graph=[
+        discord.app_commands.Choice(name="Yes", value=1),
+        discord.app_commands.Choice(name="No", value=0),
+    ],
+    range_hours=[
+        discord.app_commands.Choice(name=label, value=hours)
+        for (label, hours) in GRAPH_RANGE_CHOICES
+    ],
+)
+async def guildSteamPlayerCounts(
+    interaction: discord.Interaction,
+    graph: discord.app_commands.Choice[int],
+    range_hours: Optional[discord.app_commands.Choice[int]] = None,
+):
+    noPermission = False
+    exp = 0
+    guildSettings = fetch_guild_settings(interaction.guild_id)
+    if not guildSettings:
+        guildSettings = newGuildSettings(interaction)
+        noPermission = True
+    else:
+        exp = guildSettings.get("expiration")
+    if exp is not None and exp < time.time() and exp != -1:
+        noPermission = True
+    if noPermission and not disableWhitelisting:
+        await interaction.response.send_message(
+            content="**Server does not have permission to use this command.**\nType `/permissions` for more information.",
+            ephemeral=True,
+        )
+        return
+
+    await interaction.response.defer(ephemeral=False, thinking=True)
+    if get_latest_player_counts() is None:
+        try:
+            counts = await asyncio.to_thread(get_steam_player_count)
+            record_player_counts(None, counts)
+        except BaseException:
+            await interaction.followup.send(
+                content="Unable to gather player counts right now.",
+                ephemeral=True,
+            )
+            return
+
+    hours_value = range_hours.value if range_hours else 24
+    include_graph = graph.value == 1
+    message, graph_buf, graph_error = build_player_count_report(
+        include_graph=include_graph,
+        range_hours=hours_value,
+    )
+    if graph_error:
+        message = f"{message}\n**Graph:** {graph_error}"
+
+    view = GuildSteamPlayerMenu(
+        include_graph=include_graph,
+        range_hours=hours_value,
+    )
+
+    graph_file = None
+    if include_graph and graph_buf is not None and graph_error is None:
+        graph_file = discord.File(fp=graph_buf, filename="steam_player_counts.png")
+
+    if graph_file is not None:
+        await interaction.followup.send(content=message, file=graph_file, view=view)
+    else:
+        await interaction.followup.send(content=message, view=view)
+
+    try:
+        message_obj = await interaction.original_response()
+        upsert_steam_menu(
+            message_id=str(message_obj.id),
+            channel_id=str(message_obj.channel.id),
+            guild_id=str(interaction.guild_id),
+            include_graph=1 if include_graph else 0,
+            range_hours=hours_value,
+        )
+    except Exception:
+        pass
