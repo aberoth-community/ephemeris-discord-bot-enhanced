@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "ephemeris"
 dynamic = ["version"]
 
-requires-python = ">= 3.8"
+requires-python = "3.11"
 dependencies = [
     "discord.py@git+https://github.com/Rapptz/discord.py.git#egg=feature/user_apps",
     "numpy==1.26.4",
@@ -18,6 +18,7 @@ dependencies = [
     "num2words==0.5.13",
     "peewee==3.17.6",
     "matplotlib==3.10.8",
+    "requests==2.32.5",
 ]
 
 readme = "README.md"
@@ -29,3 +30,4 @@ dev = ["pytest", "black", "pre_commit"]
 
 [project.scripts]
 ephemeris = "ephemeris:main"
+ephemeris-optimize-cache = "ephemeris.Ephemeris.event_cache_optimizer:main"
