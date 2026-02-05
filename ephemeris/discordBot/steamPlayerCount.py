@@ -86,6 +86,14 @@ def do_request(ticket: str):
     # print(r.content.decode("utf-8", errors="replace"))
 
     response = r.text.strip()
+    if not response:
+        content_preview = r.content[:200]
+        raise RuntimeError(
+            "Unexpected response format (empty response). "
+            f"Status: {r.status_code}, "
+            f"Content-Length: {len(r.content)}, "
+            f"Preview: {content_preview!r}"
+        )
     mapping = _parse_mapping(response)
     # print(mapping)
 
