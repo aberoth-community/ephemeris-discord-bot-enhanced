@@ -38,33 +38,24 @@ def extract_ticket(output: str) -> str:
 
 
 def _parse_mapping(response: str) -> dict:
-    parts = response.strip().split(",", 1)
-    if len(parts) < 2:
-        preview = response[:200].replace("\n", "\\n")
-        raise RuntimeError(
-            f"Unexpected response format (missing mapping). "
-            f"Preview: {preview}"
-        )
+    parts = [p.strip() for p in response.strip().split(",") if p.strip()]
+    if not parts:
+        raise RuntimeError("Unexpected response format (empty response).")
 
-    mapping_str = parts[1].strip()
-    if not mapping_str:
-        raise RuntimeError("Unexpected response format (empty mapping).")
+    for part in parts:
+        try:
+            nums = [int(x) for x in part.split("_") if x]
+        except ValueError:
+            continue
 
-    try:
-        nums = [int(x) for x in mapping_str.split("_") if x]
-    except ValueError as exc:
-        preview = mapping_str[:200]
-        raise RuntimeError(
-            f"Unexpected response format (non-integer mapping). "
-            f"Preview: {preview}"
-        ) from exc
+        if len(nums) >= 2 and len(nums) % 2 == 0:
+            return dict(zip(nums[0::2], nums[1::2]))
 
-    if len(nums) % 2 != 0:
-        raise RuntimeError(
-            f"Unexpected response format (odd mapping length: {len(nums)})."
-        )
-
-    return dict(zip(nums[0::2], nums[1::2]))
+    preview = response[:200].replace("\n", "\\n")
+    raise RuntimeError(
+        "Unexpected response format (no valid mapping found). "
+        f"Preview: {preview}"
+    )
 
 
 def do_request(ticket: str):
