@@ -37,6 +37,36 @@ def extract_ticket(output: str) -> str:
     return ticket
 
 
+def _parse_mapping(response: str) -> dict:
+    parts = response.strip().split(",", 1)
+    if len(parts) < 2:
+        preview = response[:200].replace("\n", "\\n")
+        raise RuntimeError(
+            f"Unexpected response format (missing mapping). "
+            f"Preview: {preview}"
+        )
+
+    mapping_str = parts[1].strip()
+    if not mapping_str:
+        raise RuntimeError("Unexpected response format (empty mapping).")
+
+    try:
+        nums = [int(x) for x in mapping_str.split("_") if x]
+    except ValueError as exc:
+        preview = mapping_str[:200]
+        raise RuntimeError(
+            f"Unexpected response format (non-integer mapping). "
+            f"Preview: {preview}"
+        ) from exc
+
+    if len(nums) % 2 != 0:
+        raise RuntimeError(
+            f"Unexpected response format (odd mapping length: {len(nums)})."
+        )
+
+    return dict(zip(nums[0::2], nums[1::2]))
+
+
 def do_request(ticket: str):
     headers = {
         "User-Agent": "Java/1.8.0_131",
@@ -61,9 +91,7 @@ def do_request(ticket: str):
     # print(r.content.decode("utf-8", errors="replace"))
 
     response = r.text.strip()
-    mapping_str = response.split(",")[1]          # second comma-separated field
-    nums = list(map(int, mapping_str.split("_")))
-    mapping = dict(zip(nums[0::2], nums[1::2]))
+    mapping = _parse_mapping(response)
     # print(mapping)
 
     return r, mapping
@@ -92,7 +120,18 @@ def get_steam_player_count():
     # print("[3/3] Sending web request...")
     try:
         _, player_dict = do_request(ticket)
-        player_dict = { {2:"black", 3:"green", 4:"red", 5:"purple", 6:"yellow", 7:"cyan", 8:"blue"}[k]: v for k, v in player_dict.items() }
+        color_map = {
+            2: "black",
+            3: "green",
+            4: "red",
+            5: "purple",
+            6: "yellow",
+            7: "cyan",
+            8: "blue",
+        }
+        player_dict = {
+            color_map[k]: v for k, v in player_dict.items() if k in color_map
+        }
 
         # print(player_dict)
     finally:
