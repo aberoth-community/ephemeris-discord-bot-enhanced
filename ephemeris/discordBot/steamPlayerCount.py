@@ -9,6 +9,10 @@ IP = "192.99.201.128"
 URL = f"http://{IP}/get_store_session_and_names_for_steam"
 
 
+def _exe_name(base: str) -> str:
+    return f"{base}.exe" if sys.platform.startswith("win") else base
+
+
 def run_exe_capture_output(exe_path: Path) -> str:
     """Runs an exe and returns combined stdout+stderr as a string."""
     p = subprocess.run(
@@ -90,15 +94,15 @@ def do_request(ticket: str):
 
 def get_steam_player_count():
     here = Path(__file__).resolve().parent
-    open_exe = here / "steam_ticket_generator" / "ticket_open.exe"
-    close_exe = here / "steam_ticket_generator" / "ticket_close.exe"
+    open_exe = here / "steam_ticket_generator" / _exe_name("ticket_open")
+    close_exe = here / "steam_ticket_generator" / _exe_name("ticket_close")
 
     if not open_exe.exists():
-        # print(f"ERROR: Missing {open_exe}", file=sys.stderr)
+        print(f"ERROR: Missing {open_exe}", file=sys.stderr)
         sys.exit(1)
 
     if not close_exe.exists():
-        # print(f"ERROR: Missing {close_exe}", file=sys.stderr)
+        print(f"ERROR: Missing {close_exe}", file=sys.stderr)
         sys.exit(1)
 
     # print("[1/3] Running ticket_open.exe...")
